@@ -1,11 +1,23 @@
 import axios from "axios"
+import fs from 'fs'
 
 
 export class Searches {
-    historial = ['Bogotá', 'Madrid', 'Nicosia']
+    historial = []
+    dbPath = './db/database.json'
 
     constructor() {
-        //TODO: Leer DB si existe
+        this.readDb()
+    }
+
+    get capitalizeHistory () {
+
+        return this.historial.map(place => {
+            let words = place.split(' ')
+            words = words.map(w => w[0].toUpperCase() + w.substring(1))
+
+            return words.join(' ')
+        })
     }
 
     get paramsMapBox() {
@@ -13,6 +25,14 @@ export class Searches {
             'access_token': process.env.MAPBOX_KEY,
             'limit': 5,
             'language': 'es'
+        }
+    }
+
+    get paramsOpenWeather() {
+        return {
+            appid: process.env.OPENWEATHER_KEY,
+            units: 'metric',
+            lang: 'es',
         }
     }
 
@@ -38,7 +58,65 @@ export class Searches {
         } catch (error) {
             return []
         }
+    }
 
+    async weatherPlace(lat, lon) {
+        try {
+            const instance = axios.create({
+                baseURL: `https://api.openweathermap.org/data/2.5/weather`,
+                params: { ...this.paramsOpenWeather, lat, lon }
+            })
+
+            const response = await instance.get()
+
+            const { weather, main } = response.data
+
+            const { description } = weather[0]
+            const { temp, temp_max, temp_min } = main
+
+            return {
+                description,
+                temp_min,
+                temp_max,
+                temp
+            }
+        } catch (error) {
+            console.log(error)
+        }
+    }
+
+
+    addHistory(place = '') {
+
+
+        if (this.historial.includes(place.toLocaleLowerCase())) return
+
+        this.historial = this.historial.splice(0, 4)
+
+        this.historial.unshift(place.toLocaleLowerCase())
+
+        //Grabar en DB
+        this.saveDb()
+    }
+
+
+    saveDb() {
+
+        const payload = {
+            historial: this.historial
+        }
+
+        fs.writeFileSync(this.dbPath, JSON.stringify(payload))
+    }
+
+    readDb() {
+
+        if (!fs.existsSync(this.dbPath)) return
+
+        const info = fs.readFileSync(this.dbPath, { encoding: 'utf-8' })
+        const data = JSON.parse(info)
+
+        this.historial = data.historial
 
     }
 }
